@@ -257,7 +257,7 @@ export default function AdhanPlayer() {
 
   return (
     <>
-      {/* <AudioUnlock onUnlocked={handleAudioUnlocked} /> */}
+      <AudioUnlock onUnlocked={handleAudioUnlocked} />
 
       <div className="fixed inset-0 bg-gradient-to-br from-emerald-900 via-teal-900 to-cyan-900 overflow-y-auto">
         {/* Animated background elements */}
