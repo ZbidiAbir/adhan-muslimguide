@@ -14,7 +14,7 @@ import { PrayerTimes } from "@/types/prayer.types";
 type StatusType =
   | "Loading..."
   | "Ready"
-  | "🔊 Adhan Al Asr playing..."
+  | "🔊 Adhan playing..."
   | "Audio error"
   | "Audio blocked";
 
@@ -30,6 +30,7 @@ export default function AdhanPlayer() {
   const [nextPrayer, setNextPrayer] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastPlayedDateRef = useRef<string>("");
+  const lastPlayedPrayerRef = useRef<string>("");
 
   // Audio initialization
   useEffect(() => {
@@ -99,7 +100,7 @@ export default function AdhanPlayer() {
     }
   }, [currentTime, prayerTimes]);
 
-  // Check and trigger Adhan
+  // Check and trigger Adhan for any prayer time
   const checkAndPlayAdhan = useCallback(() => {
     if (!prayerTimes || !isAudioUnlocked) return;
 
@@ -109,26 +110,42 @@ export default function AdhanPlayer() {
       minute: "2-digit",
       hour12: false,
     });
-
-    const asrTime = prayerTimes.asr;
     const today = now.toLocaleDateString();
 
+    // List of all prayer times to check
+    const prayers = [
+      { name: "Fajr", time: prayerTimes.fajr },
+      { name: "Dhuhr", time: prayerTimes.dhuhr },
+      { name: "Asr", time: prayerTimes.asr },
+      { name: "Maghrib", time: prayerTimes.maghrib },
+      { name: "Isha", time: prayerTimes.isha },
+    ];
+
+    // Find which prayer time matches current time
+    const matchingPrayer = prayers.find(
+      (prayer) => prayer.time === currentHourMinute
+    );
+
     if (
-      currentHourMinute === asrTime &&
+      matchingPrayer &&
       !adhanTriggered &&
-      lastPlayedDateRef.current !== today
+      (lastPlayedDateRef.current !== today ||
+        lastPlayedPrayerRef.current !== matchingPrayer.name)
     ) {
-      console.log(`🕌 It's Asr time (${asrTime})! Triggering Adhan...`);
+      console.log(
+        `🕌 It's ${matchingPrayer.name} time (${matchingPrayer.time})! Triggering Adhan...`
+      );
 
       if (!audioService.isPlaying) {
         audioService.play();
         setAdhanTriggered(true);
         lastPlayedDateRef.current = today;
-        setStatus("🔊 Adhan Al Asr playing...");
+        lastPlayedPrayerRef.current = matchingPrayer.name;
+        setStatus(`🔊 Adhan playing...`);
 
         if (Notification.permission === "granted") {
           new Notification("🕌 Prayer time", {
-            body: `It's time for Al Asr prayer at ${asrTime}`,
+            body: `It's time for ${matchingPrayer.name} prayer at ${matchingPrayer.time}`,
             silent: false,
           });
         }
@@ -143,7 +160,7 @@ export default function AdhanPlayer() {
           }
         }, 300000);
       }
-    } else if (currentHourMinute !== asrTime && adhanTriggered) {
+    } else if (!matchingPrayer && adhanTriggered) {
       setAdhanTriggered(false);
     }
   }, [prayerTimes, adhanTriggered, isAudioUnlocked]);
@@ -194,7 +211,7 @@ export default function AdhanPlayer() {
   };
 
   const getTimeRemaining = (): string => {
-    if (!prayerTimes) return "";
+    if (!prayerTimes || !nextPrayer) return "";
 
     const now = new Date();
     const currentHourMinute = now.toLocaleTimeString("en-US", {
@@ -204,13 +221,16 @@ export default function AdhanPlayer() {
     });
 
     const currentMinutes = timeToMinutes(currentHourMinute);
-    const asrMinutes = timeToMinutes(prayerTimes.asr);
+    const nextPrayerTime = prayerTimes[
+      nextPrayer.toLowerCase() as keyof PrayerTimes
+    ] as string;
+    const nextMinutes = timeToMinutes(nextPrayerTime);
 
-    if (currentMinutes >= asrMinutes) {
-      return "Asr time has passed for today";
+    let diffMinutes = nextMinutes - currentMinutes;
+    if (diffMinutes < 0) {
+      diffMinutes += 24 * 60;
     }
 
-    const diffMinutes = asrMinutes - currentMinutes;
     const hours = Math.floor(diffMinutes / 60);
     const minutes = diffMinutes % 60;
 
@@ -237,7 +257,7 @@ export default function AdhanPlayer() {
 
   return (
     <>
-      <AudioUnlock onUnlocked={handleAudioUnlocked} />
+      {/* <AudioUnlock onUnlocked={handleAudioUnlocked} /> */}
 
       <div className="fixed inset-0 bg-gradient-to-br from-emerald-900 via-teal-900 to-cyan-900 overflow-y-auto">
         {/* Animated background elements */}
@@ -296,23 +316,22 @@ export default function AdhanPlayer() {
             <div className="grid lg:grid-cols-2 gap-8 items-start">
               {/* Left Column - Main Prayer Time */}
               <div className="space-y-6">
-                {/* Asr Time Card */}
+                {/* Next Prayer Card */}
                 <div className="relative group">
                   <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 rounded-3xl blur-xl opacity-30 group-hover:opacity-50 transition duration-500"></div>
                   <div className="relative bg-gradient-to-br from-amber-500/20 to-orange-600/20 backdrop-blur-xl border border-white/20 rounded-3xl p-8 shadow-2xl">
                     <div className="text-center">
                       <div className="flex items-center justify-center gap-3 mb-6">
-                        <span className="text-3xl">⏰</span>
-                        <h2 className="text-2xl font-semibold text-amber-200">
-                          Al Asr Prayer Time
+                        <h2 className="text-xl font-semibold text-amber-200">
+                          Next Prayer
                         </h2>
                       </div>
-                      <div className="text-9xl md:text-8xl font-mono font-bold bg-gradient-to-r from-amber-300 to-yellow-300 bg-clip-text text-transparent mb-6 tracking-wider">
-                        {prayerTimes.asr}
+                      <div className="text-3xl  font-mono font-bold bg-gradient-to-r from-amber-300 to-yellow-300 bg-clip-text text-transparent mb-6 tracking-wider uppercase">
+                        {nextPrayer || "Loading..."}
                       </div>
                       <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-sm rounded-full text-sm text-emerald-200">
-                        <span>📍</span>
-                        <span>Muslim World League (MWL)</span>
+                        <span>🕌</span>
+                        <span>Upcoming prayer time</span>
                       </div>
                     </div>
                   </div>
@@ -323,7 +342,7 @@ export default function AdhanPlayer() {
                   <div className="bg-gradient-to-r from-emerald-800/50 to-teal-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 text-center">
                     <div className="text-sm text-emerald-300 mb-3 flex items-center justify-center gap-2">
                       <span>⏱️</span>
-                      <span>Time remaining until Asr</span>
+                      <span>Time remaining until next prayer</span>
                     </div>
                     <div className="text-4xl md:text-5xl font-mono font-bold text-amber-300">
                       {getTimeRemaining()}
@@ -331,7 +350,7 @@ export default function AdhanPlayer() {
                   </div>
                 </div>
 
-                {/* Method Selector */}
+                {/* Method Selector - Uncomment if needed */}
                 {/* <div className="transform transition-all duration-300 hover:scale-[1.02]">
                   <MethodSelector
                     currentMethod={calculationMethod}
@@ -367,7 +386,6 @@ export default function AdhanPlayer() {
                         time: prayerTimes.asr,
                         icon: "🌟",
                         desc: "Afternoon",
-                        highlight: true,
                       },
                       {
                         name: "Maghrib",
@@ -384,11 +402,7 @@ export default function AdhanPlayer() {
                     ].map((prayer) => (
                       <div
                         key={prayer.name}
-                        className={`p-4 rounded-xl text-center transition-all duration-300 ${
-                          prayer.highlight
-                            ? "bg-gradient-to-br from-amber-500/30 to-orange-500/30 border-2 border-amber-500/50 shadow-xl scale-105 ring-1 ring-amber-500/30"
-                            : "bg-white/5 hover:bg-white/10 border border-white/10"
-                        }`}
+                        className="p-4 rounded-xl text-center transition-all duration-300 bg-white/5 hover:bg-white/10 border border-white/10"
                       >
                         <div className="text-3xl mb-2">{prayer.icon}</div>
                         <div className="text-xs text-emerald-300 uppercase tracking-wide mb-1">
@@ -397,11 +411,7 @@ export default function AdhanPlayer() {
                         <div className="text-sm font-semibold text-emerald-200 mb-1">
                           {prayer.name}
                         </div>
-                        <div
-                          className={`font-mono font-bold text-lg ${
-                            prayer.highlight ? "text-amber-300" : "text-white"
-                          }`}
-                        >
+                        <div className="font-mono font-bold text-lg text-white">
                           {prayer.time}
                         </div>
                       </div>
@@ -506,7 +516,7 @@ export default function AdhanPlayer() {
                   </div>
                 </div>
                 <div className="mt-3 text-xs text-amber-300 bg-amber-500/10 rounded-lg p-2 text-center">
-                  ⚡ Adhan will automatically trigger at {prayerTimes.asr}
+                  ⚡ Adhan will automatically trigger at all prayer times
                 </div>
                 {audioService.isPlaying && (
                   <div className="mt-3 flex items-center justify-center gap-2 text-sm animate-pulse bg-green-500/20 rounded-lg p-2">
